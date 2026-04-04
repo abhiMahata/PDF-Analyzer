@@ -6,10 +6,14 @@
 
 
 import time
+import io
 import base64
 from dotenv import load_dotenv
 import streamlit as st
-from PyPDF2 import PdfReader
+import fitz
+import easyocr
+import numpy as np
+from streamlit_pdf_viewer import pdf_viewer
 
 
 
@@ -29,16 +33,51 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 
-def process_pdf(pdf_file):
-    """Extracts text from a single PDF, chunks it, and generates local embeddings."""
+@st.cache_resource
+def get_ocr_reader():
+ 
+    return easyocr.Reader(['en'], gpu=False)
+
+def process_pdf(pdf_bytes):
+    """Extracts text from a single PDF (with OCR fallback), chunks it, and generates local embeddings."""
     text = ""
-    pdf_reader = PdfReader(pdf_file)
-    for page in pdf_reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    ocr_needed = False
 
+    for page in doc:
+        page_text = page.get_text()
+        if page_text and page_text.strip():
+            text += page_text + "\n"
+        else:
+            ocr_needed = True
 
+    if ocr_needed or not text.strip():
+     
+        try:
+            reader = get_ocr_reader()
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                # Convert pixmap to numpy array for EasyOCR
+                img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+                if pix.n == 4: # RGBA
+                    img_data = img_data[:,:,:3] # Drop Alpha
+                
+                
+                results = reader.readtext(img_data, detail=0)
+                ocr_text = "\n".join(results)
+                
+                if ocr_text and ocr_text.strip():
+                    text += ocr_text + "\n"
+        except Exception as ocr_err:
+            if not text.strip():
+                raise RuntimeError(f"OCR fallback failed: {ocr_err}")
+            else:
+                pass 
+                
+    doc.close()
+
+    if not text.strip():
+        raise RuntimeError("No text could be extracted from PDF. Please upload a valid text or scanned document.")
 
     text_splitter = CharacterTextSplitter(
         separator="\n",
@@ -47,10 +86,13 @@ def process_pdf(pdf_file):
         length_function=len
     )
     chunks = text_splitter.split_text(text)
-    
+
+    if not chunks:
+        raise RuntimeError("Document text split resulted in zero chunks.")
+
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     knowledge_base = FAISS.from_texts(chunks, embeddings)
-    
+
     return knowledge_base
 
 
@@ -108,6 +150,12 @@ def main():
         st.session_state.pdf_bytes = None
     if "new_query" not in st.session_state:
         st.session_state.new_query = None
+    if "llm" not in st.session_state:
+        try:
+            st.session_state.llm = ChatGroq(model="llama-3.1-8b-instant")
+        except Exception as e:
+            st.warning(f"LLM initialization issue: {e}")
+            st.session_state.llm = None
 
     # Function to clear search bar but grab value
     def handle_submit():
@@ -130,7 +178,7 @@ def main():
     st.markdown("---")
 
     #uploader
-    if st.session_state.knowledge_base is None:
+    if st.session_state.pdf_bytes is None:
         st.markdown("<h2 style='text-align: center; color: white;'>Initialize Scanner</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #888;'>Drop your document into the massive dropzone below.</p>", unsafe_allow_html=True)
         
@@ -140,11 +188,17 @@ def main():
             with st.spinner("Scanning..."):
                 # Save bytes so we can open it alongside later
                 st.session_state.pdf_bytes = pdf_file.getvalue()
-                st.session_state.knowledge_base = process_pdf(pdf_file)
+                try:
+                    st.session_state.knowledge_base = process_pdf(st.session_state.pdf_bytes)
+                    st.success("PDF processed successfully.")
+                except Exception as e:
+                    st.error(f"Failed to process PDF: {e}")
+                    st.session_state.knowledge_base = None
                 st.rerun()
 
+
     #pdfchatsplitview
-    if st.session_state.knowledge_base is not None:
+    if st.session_state.pdf_bytes is not None:
         
         #reset?
         if st.sidebar.button("Start Over / Upload New"):
@@ -158,17 +212,19 @@ def main():
         #docreference
         with col1:
             st.markdown("### Document Reference")
-            base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
-            # Iframe embedding to view PDF in browser
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf" style="border-radius: 10px; border: 1px solid #333; background: #fff;"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
+            if st.session_state.pdf_bytes:
+                pdf_viewer(input=st.session_state.pdf_bytes, height=800)
+            else:
+                st.warning("PDF content is not available for viewing right now.")
 
         #chat
         with col2:
             st.markdown("### chat")
             
             #enter=process
-            if current_query:
+            if st.session_state.knowledge_base is None:
+                st.error("AI is unavailable for this document. It may be an image-only PDF and system OCR tools are missing. But you can still safely view it on the left.")
+            elif current_query:
                 # Add question to history
                 st.session_state.messages.append({"role": "user", "content": current_query})
                 
@@ -193,8 +249,10 @@ def main():
                         "Answer:"
                     )
                     
-                    llm = ChatGroq(model="llama-3.1-8b-instant")
-                    chain = prompt | llm | StrOutputParser()
+                    if st.session_state.llm is None:
+                        st.error("LLM is unavailable. Please check connection or model setup.")
+                        return
+                    chain = prompt | st.session_state.llm | StrOutputParser()
                     
                     st.markdown(f"**You:** {current_query}")
                     st.markdown("**AI Response:**")
@@ -221,7 +279,7 @@ def main():
                     })
             
             # Or if they clicked a button, just show the most recent Q&A to keep it on screen
-            elif len(st.session_state.messages) > 0:
+            elif len(st.session_state.messages) >= 2:
                 last_msg_user = st.session_state.messages[-2]
                 last_msg_ai = st.session_state.messages[-1]
                 
@@ -235,8 +293,17 @@ def main():
                         for i, source in enumerate(last_msg_ai["sources"]):
                             st.markdown(f"**Source {i+1}:**\n{source}")
                             st.markdown("---")
+            elif len(st.session_state.messages) == 1:
+                st.markdown("**You:** " + st.session_state.messages[0]['content'])
+                st.markdown("**AI Response:** Waiting for AI response...")
+            else:
+                st.info("Ask a question to start the conversation.")
 
             st.markdown("<br><br>", unsafe_allow_html=True)
+            
+
+
+
             
             #history
             with st.expander("Expand Conversation History", expanded=False):

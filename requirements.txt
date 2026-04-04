@@ -1,7 +1,13 @@
 langchain
-langchain-google-genai
 langchain-community
+langchain-groq
+langchain-huggingface
 PyPDF2==3.0.1
 python-dotenv==1.0.0
 streamlit
+streamlit-pdf-viewer
 faiss-cpu
+pillow
+pdf2image
+pytesseract
+sentence-transformers
