@@ -1,3 +1,4 @@
+#to run type streamlit run app.py
 
 
 
@@ -27,6 +28,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage
 
 
 
@@ -35,49 +37,95 @@ from langchain_core.output_parsers import StrOutputParser
 
 @st.cache_resource
 def get_ocr_reader():
- 
     return easyocr.Reader(['en'], gpu=False)
 
+
+def vision_transcribe_page(pix) -> str:
+    """Use Groq vision LLM to transcribe a page image — handles handwriting well."""
+    try:
+        load_dotenv(override=True)
+        img_bytes = pix.tobytes("png")
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+        vision_llm = ChatGroq(model="llama-3.2-11b-vision-preview")
+        msg = HumanMessage(content=[
+            {
+                "type": "text",
+                "text": (
+                    "You are a precise document transcription assistant. "
+                    "Transcribe ALL text visible in this image exactly as written, "
+                    "including handwriting, printed text, numbers, and special characters. "
+                    "Preserve line breaks and structure. Output ONLY the transcribed text, nothing else."
+                )
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}"}
+            }
+        ])
+        result = vision_llm.invoke([msg])
+        return result.content.strip()
+    except Exception as e:
+        return ""
+
+
 def process_pdf(pdf_bytes):
-    """Extracts text from a single PDF (with OCR fallback), chunks it, and generates local embeddings."""
+    """Extracts text from a PDF using a 3-tier strategy:
+    1. Native text extraction (fastest, for digital PDFs)
+    2. EasyOCR (for scanned/printed documents)
+    3. Groq Vision LLM fallback (best for handwriting)
+    """
     text = ""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    ocr_needed = False
 
+    # --- Tier 1: Native text extraction ---
+    page_texts = []
     for page in doc:
         page_text = page.get_text()
+        page_texts.append(page_text.strip() if page_text else "")
         if page_text and page_text.strip():
             text += page_text + "\n"
-        else:
-            ocr_needed = True
 
-    if ocr_needed or not text.strip():
-     
+    # --- Tier 2 & 3: OCR + Vision LLM for pages with no/little text ---
+    pages_needing_ocr = [i for i, t in enumerate(page_texts) if not t]
+
+    if pages_needing_ocr or not text.strip():
         try:
             reader = get_ocr_reader()
-            for page in doc:
-                pix = page.get_pixmap(dpi=200)
-                # Convert pixmap to numpy array for EasyOCR
-                img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-                if pix.n == 4: # RGBA
-                    img_data = img_data[:,:,:3] # Drop Alpha
-                
-                
-                results = reader.readtext(img_data, detail=0)
-                ocr_text = "\n".join(results)
-                
-                if ocr_text and ocr_text.strip():
-                    text += ocr_text + "\n"
-        except Exception as ocr_err:
-            if not text.strip():
-                raise RuntimeError(f"OCR fallback failed: {ocr_err}")
+        except Exception:
+            reader = None
+
+        for page_idx in pages_needing_ocr:
+            page = doc[page_idx]
+            pix = page.get_pixmap(dpi=200)
+
+            # Tier 2: Try EasyOCR first (faster for printed text)
+            easyocr_text = ""
+            if reader:
+                try:
+                    img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+                    if pix.n == 4:
+                        img_data = img_data[:, :, :3]
+                    results = reader.readtext(img_data, detail=0)
+                    easyocr_text = "\n".join(results).strip()
+                except Exception:
+                    easyocr_text = ""
+
+            if easyocr_text and len(easyocr_text) > 30:
+                # EasyOCR got a reasonable result — use it
+                text += easyocr_text + "\n"
             else:
-                pass 
-                
+                # Tier 3: Vision LLM fallback — handles handwriting
+                vision_text = vision_transcribe_page(pix)
+                if vision_text:
+                    text += vision_text + "\n"
+                elif easyocr_text:
+                    # Vision failed but EasyOCR had something (even if sparse)
+                    text += easyocr_text + "\n"
+
     doc.close()
 
     if not text.strip():
-        raise RuntimeError("No text could be extracted from PDF. Please upload a valid text or scanned document.")
+        raise RuntimeError("No text could be extracted from this PDF. It may be empty or corrupted.")
 
     text_splitter = CharacterTextSplitter(
         separator="\n",
@@ -107,7 +155,7 @@ def main():
     #CSSintegration
     st.markdown("""
     <style>
-        /* Pitch black background globally */
+       
         [data-testid="stAppViewContainer"] {
             background-color: #000000;
         }
@@ -115,7 +163,7 @@ def main():
             background-color: #000000;
         }
         
-        /* Make file uploader look massive */
+        
         [data-testid="stFileUploader"] > div > div {
             border: 3px dashed #555 !important;
             border-radius: 20px !important;
@@ -123,7 +171,7 @@ def main():
             background-color: #0a0a0a !important;
         }
         
-        /* General text coloring to pop on black */
+        
         * { color: #f0f0f0; }
         
         footer {visibility: hidden;}
@@ -157,7 +205,7 @@ def main():
             st.warning(f"LLM initialization issue: {e}")
             st.session_state.llm = None
 
-    # Function to clear search bar but grab value
+    # clearsearchbarandgrabvalue
     def handle_submit():
         st.session_state.new_query = st.session_state.query_input
         st.session_state.query_input = ""
@@ -278,7 +326,7 @@ def main():
                         "sources": sources_list
                     })
             
-            # Or if they clicked a button, just show the most recent Q&A to keep it on screen
+            
             elif len(st.session_state.messages) >= 2:
                 last_msg_user = st.session_state.messages[-2]
                 last_msg_ai = st.session_state.messages[-1]
