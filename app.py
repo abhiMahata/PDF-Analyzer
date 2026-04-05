@@ -1,4 +1,4 @@
-#to run type streamlit run app.py
+#to run type .\.venv\Scripts\streamlit run app.py
 
 
 
