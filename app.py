@@ -40,6 +40,11 @@ def get_ocr_reader():
     return easyocr.Reader(['en'], gpu=False)
 
 
+@st.cache_resource
+def get_embeddings():
+    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+
 def vision_transcribe_page(pix) -> str:
     """Use Groq vision LLM to transcribe a page image — handles handwriting well."""
     try:
@@ -138,7 +143,7 @@ def process_pdf(pdf_bytes):
     if not chunks:
         raise RuntimeError("Document text split resulted in zero chunks.")
 
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = get_embeddings()
     knowledge_base = FAISS.from_texts(chunks, embeddings)
 
     return knowledge_base
@@ -151,6 +156,10 @@ def process_pdf(pdf_bytes):
 def main():
     load_dotenv(override=True)
     st.set_page_config(page_title="Automated PDF Analyzer", layout="wide")
+
+    # Pre-warm heavy models on first load so uploads feel instant
+    get_embeddings()
+    get_ocr_reader()
     
     #CSSintegration
     st.markdown("""
