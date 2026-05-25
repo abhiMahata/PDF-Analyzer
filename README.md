@@ -240,12 +240,9 @@ Extracted text is chunked (1000 chars, 200 overlap), embedded using `all-MiniLM-
 
 ![History and Sources](screenshot_5.png)
 
-##  Contributing
+##  Try it For yourself!!
 
-Contributions, issues, and feature requests are welcome! Feel free to:
-- Open an [Issue](../../issues) to report a bug or suggest a feature.
-- Submit a [Pull Request](../../pulls) with your improvements.
-
+https://huggingface.co/spaces/poppy-wuggy/pdf-analyzer
 
 <div align="center">
 
