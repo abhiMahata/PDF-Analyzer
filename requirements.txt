@@ -1,13 +1,23 @@
+# Core LangChain stack
 langchain
 langchain-community
 langchain-groq
 langchain-huggingface
-PyPDF2==3.0.1
-python-dotenv==1.0.0
+langchain-text-splitters
+
+# LLM & Embeddings
+sentence-transformers
+faiss-cpu
+
+# PDF processing
+pymupdf              # fitz native PDF text extraction
+easyocr              # OCR for scanned/printed documents
+numpy
+
+# Streamlit UI
 streamlit
 streamlit-pdf-viewer
-faiss-cpu
+
+# Utilities
+python-dotenv
 pillow
-pdf2image
-pytesseract
-sentence-transformers

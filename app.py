@@ -6,10 +6,16 @@
 
 
 
+import os
 import time
 import io
 import base64
 from dotenv import load_dotenv
+
+def sanitize_groq_key():
+    if "GROQ_API_KEY" in os.environ and os.environ["GROQ_API_KEY"]:
+        os.environ["GROQ_API_KEY"] = os.environ["GROQ_API_KEY"].replace('"', '').replace("'", "").strip()
+
 import streamlit as st
 import fitz
 import easyocr
@@ -46,9 +52,10 @@ def get_embeddings():
 
 
 def vision_transcribe_page(pix) -> str:
-    """Use Groq vision LLM to transcribe a page image — handles handwriting well."""
+    #Using Groq vision LLM to transcribe a page image. handles handwriting well.
     try:
         load_dotenv(override=True)
+        sanitize_groq_key()
         img_bytes = pix.tobytes("png")
         b64 = base64.b64encode(img_bytes).decode("utf-8")
         vision_llm = ChatGroq(model="llama-3.2-11b-vision-preview")
@@ -74,15 +81,15 @@ def vision_transcribe_page(pix) -> str:
 
 
 def process_pdf(pdf_bytes):
-    """Extracts text from a PDF using a 3-tier strategy:
-    1. Native text extraction (fastest, for digital PDFs)
-    2. EasyOCR (for scanned/printed documents)
-    3. Groq Vision LLM fallback (best for handwriting)
-    """
+    #Extracts text from a PDF using a 3-tier strategy:
+    #1. Native text extraction (fastest, for digital PDFs)
+    #2. EasyOCR (for scanned/printed documents)
+    #3. Groq Vision LLM fallback (best for handwriting)
+    
     text = ""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-    # --- Tier 1: Native text extraction ---
+    # Tier 1: Native text extraction 
     page_texts = []
     for page in doc:
         page_text = page.get_text()
@@ -90,7 +97,7 @@ def process_pdf(pdf_bytes):
         if page_text and page_text.strip():
             text += page_text + "\n"
 
-    # --- Tier 2 & 3: OCR + Vision LLM for pages with no/little text ---
+    # Tier 2 & 3: OCR + Vision LLM for pages with no/little text 
     pages_needing_ocr = [i for i, t in enumerate(page_texts) if not t]
 
     if pages_needing_ocr or not text.strip():
@@ -155,6 +162,7 @@ def process_pdf(pdf_bytes):
 
 def main():
     load_dotenv(override=True)
+    sanitize_groq_key()
     st.set_page_config(page_title="Automated PDF Analyzer", layout="wide")
 
     # Pre-warm heavy models on first load so uploads feel instant
@@ -211,7 +219,9 @@ def main():
         try:
             st.session_state.llm = ChatGroq(model="llama-3.1-8b-instant")
         except Exception as e:
-            st.warning(f"LLM initialization issue: {e}")
+            key = os.environ.get("GROQ_API_KEY", "")
+            safe_key = f"{key[:10]}...{key[-10:]} (Length: {len(key)})" if key else "None"
+            st.warning(f"LLM initialization issue: {e} | Loaded Key: {safe_key}")
             st.session_state.llm = None
 
     # clearsearchbarandgrabvalue
