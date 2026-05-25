@@ -4,7 +4,7 @@
 
 # PDF Analyzer
 
-**AI-Powered Document Intelligence — Chat with Any PDF**
+**AI-Powered Document Intelligence - Chat with Any PDF**
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
@@ -19,7 +19,7 @@
 
 ##  What Is This?
 
-**PDF Analyzer** is a full-stack AI application that lets you upload any PDF and have a natural-language conversation with it. It intelligently extracts text from even the most challenging documents — digital PDFs, scanned images, and **handwritten notes** — and answers your questions with full source traceability.
+**PDF Analyzer** is a full-stack AI application that lets you upload any PDF and have a natural-language conversation with it. It intelligently extracts text from even the most challenging documents , digital PDFs, scanned images, and **handwritten notes** , and answers your questions with full source traceability.
 
 Built as a showcase of production-grade RAG (Retrieval-Augmented Generation) architecture using modern LLM tooling.
 
