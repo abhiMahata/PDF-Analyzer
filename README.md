@@ -30,7 +30,7 @@ Built as a showcase of production-grade RAG (Retrieval-Augmented Generation) arc
 
  **3-Tier Text Extraction**  Native → EasyOCR → Groq Vision LLM fallback pipeline for maximum coverage 
  **Handwriting Support**  Llama 3.2 Vision model transcribes handwritten pages that standard OCR misses 
- **Conversational Q&A** Multi-turn chat with conversation history, powered by Llama 3.1 via Groq 
+ **Conversational Q&A** Multi-turn chat with conversation history, powered by Llama 3.3- 70b-versatile via Groq 
  **RAG Architecture** FAISS vector store + HuggingFace embeddings for precise, grounded answers 
  **Source Transparency** Every answer shows the exact document passages it was drawn from 
  **Side-by-Side View**  PDF viewer alongside the chat panel for instant cross-referencing 
@@ -69,7 +69,7 @@ Built as a showcase of production-grade RAG (Retrieval-Augmented Generation) arc
                          │ Similarity Search on Query
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│               Groq LLM (Llama 3.1 8B Instant)           │
+│               Groq LLM (Llama-3.3-70b-versatile)        │
 │     Context + Conversation History + User Query         │
 │                   → Streamed Answer                     │
 └─────────────────────────────────────────────────────────┘
@@ -80,7 +80,7 @@ Built as a showcase of production-grade RAG (Retrieval-Augmented Generation) arc
 ## Tech Stack
 
 - **Frontend**: [Streamlit](https://streamlit.io/) + custom CSS
-- **LLM Inference**: [Groq](https://groq.com/) (`llama-3.1-8b-instant` for chat, `llama-3.2-11b-vision-preview` for OCR fallback)
+- **LLM Inference**: [Groq](https://groq.com/) (`llama-3.3-70b-versatile` for chat, `llama-3.2-11b-vision-preview` for OCR fallback)
 - **Orchestration**: [LangChain](https://www.langchain.com/) (chains, prompts, text splitters)
 - **Embeddings**: [HuggingFace](https://huggingface.co/) (`sentence-transformers/all-MiniLM-L6-v2`)
 - **Vector Store**: [FAISS](https://faiss.ai/)
