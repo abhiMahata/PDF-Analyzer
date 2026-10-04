@@ -217,7 +217,7 @@ def main():
         st.session_state.new_query = None
     if "llm" not in st.session_state:
         try:
-            st.session_state.llm = ChatGroq(model="llama-3.1-8b-instant")
+            st.session_state.llm = ChatGroq(model="llama-3.3-70b-versatile")
         except Exception as e:
             key = os.environ.get("GROQ_API_KEY", "")
             safe_key = f"{key[:10]}...{key[-10:]} (Length: {len(key)})" if key else "None"
