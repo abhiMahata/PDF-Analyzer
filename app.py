@@ -49,7 +49,11 @@ from langchain_core.messages import HumanMessage
 
 @st.cache_resource
 def get_ocr_reader():
-    return easyocr.Reader(['en'], gpu=False)
+    try:
+        return easyocr.Reader(['en'], gpu=False)
+    except Exception as e:
+        print(f"EasyOCR initialization failed: {e}")
+        return None
 
 
 @st.cache_resource
@@ -171,10 +175,7 @@ def main():
     sanitize_groq_key()
     st.set_page_config(page_title="Automated PDF Analyzer", layout="wide")
 
-    # Pre-warm heavy models on first load so uploads feel instant
-    get_embeddings()
-    get_ocr_reader()
-    
+
     #CSSintegration
     st.markdown("""
     <style>
