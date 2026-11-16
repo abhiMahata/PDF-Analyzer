@@ -13,6 +13,12 @@ import base64
 from dotenv import load_dotenv
 
 def sanitize_groq_key():
+    if "GROQ_API_KEY" not in os.environ or not os.environ["GROQ_API_KEY"]:
+        try:
+            if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+                os.environ["GROQ_API_KEY"] = str(st.secrets["GROQ_API_KEY"])
+        except Exception:
+            pass
     if "GROQ_API_KEY" in os.environ and os.environ["GROQ_API_KEY"]:
         os.environ["GROQ_API_KEY"] = os.environ["GROQ_API_KEY"].replace('"', '').replace("'", "").strip()
 
@@ -215,9 +221,9 @@ def main():
         st.session_state.pdf_bytes = None
     if "new_query" not in st.session_state:
         st.session_state.new_query = None
-    if "llm" not in st.session_state:
+    if "llm" not in st.session_state or getattr(st.session_state.llm, "model_name", None) != "openai/gpt-oss-120b":
         try:
-            st.session_state.llm = ChatGroq(model="llama-3.3-70b-versatile")
+            st.session_state.llm = ChatGroq(model="openai/gpt-oss-120b")
         except Exception as e:
             key = os.environ.get("GROQ_API_KEY", "")
             safe_key = f"{key[:10]}...{key[-10:]} (Length: {len(key)})" if key else "None"
@@ -325,11 +331,15 @@ def main():
                     st.markdown("**AI Response:**")
                     
                     # Stream logic directly to screen
-                    response = st.write_stream(chain.stream({
-                        "context": context, 
-                        "question": current_query,
-                        "chat_history": chat_history_text
-                    }))
+                    try:
+                        response = st.write_stream(chain.stream({
+                            "context": context, 
+                            "question": current_query,
+                            "chat_history": chat_history_text
+                        }))
+                    except Exception as e:
+                        st.error(f"Error communicating with LLM: {e}")
+                        return
                     
                     # Display sources immediately below
                     sources_list = [d.page_content for d in docs]
